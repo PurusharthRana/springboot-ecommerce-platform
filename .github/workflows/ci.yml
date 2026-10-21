@@ -1,0 +1,80 @@
+
+name: Ecommerce CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ecommerce-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify Java and Maven Wrapper
+        run: |
+          java -version
+          chmod +x mvnw
+          ./mvnw --version
+
+      - name: Compile, test and package
+        env:
+          SPRING_APP_JWTEXPIRATIONMS: "86400000"
+          SPRING_APP_JWTSECRET: ${{ secrets.JWT_SECRET }}
+          SPRING_ECOM_APP_JWTCOOKIENAME: "ecom-jwt"
+          PROJECT_IMAGE: "images/"
+        run: ./mvnw -B -ntp clean verify
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+            name: maven-test-reports
+            path: |
+                **/target/surefire-reports/**
+                **/target/failsafe-reports/**
+            if-no-files-found: ignore
+            retention-days: 7
+
+      - name: Upload packaged JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-application-jar
+          path: |
+            **/target/*.jar
+            !**/target/*-sources.jar
+            !**/target/*-javadoc.jar
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build Docker image
+        if: success()
+        run: docker build --pull --tag "ecommerce-app:${{ github.sha }}" .
+
+      - name: Verify Docker image
+        if: success()
+        run: docker image inspect "ecommerce-app:${{ github.sha }}"

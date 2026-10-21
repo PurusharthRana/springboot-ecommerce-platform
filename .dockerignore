@@ -1,0 +1,21 @@
+# Git metadata
+.git
+.gitignore
+
+# CI workflow files
+.github
+
+# IDE files
+.idea
+*.iml
+.vscode
+
+# Logs and temporary files
+*.log
+tmp
+temp
+
+# Secrets and environment files
+.env
+.env.*
+!.env.example
